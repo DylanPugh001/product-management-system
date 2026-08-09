@@ -36,6 +36,11 @@ export class ProductListComponent implements OnInit {
     ProductStatus.SoftDeleted,
   ];
 
+  onStatusChange(event: Event): void {
+    const value = (event.target as HTMLSelectElement).value;
+    this.statusFilter.set(value === 'all' ? 'all' : (Number(value) as ProductStatus));
+  }
+
   get isManager(): boolean {
     return this.auth.isManager;
   }

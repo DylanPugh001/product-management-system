@@ -16,7 +16,7 @@
 
 <div class="filter">
   <label for="status">Status</label>
-  <select id="status" [value]="statusFilter()" (change)="statusFilter.set($any($event.target).value)">
+  <select id="status" [value]="statusFilter()" (change)="onStatusChange($event)">
     <option value="all">All</option>
     @for (s of statuses; track s) {
       <option [value]="s">{{ statusLabels[s] }}</option>

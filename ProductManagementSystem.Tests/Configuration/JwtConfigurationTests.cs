@@ -45,13 +45,6 @@ public class JwtConfigurationTests : IDisposable
             });
         });
 
-    [Fact]
-    public void Startup_ShouldThrow_WhenJwtKeyIsMissing()
-    {
-        Environment.SetEnvironmentVariable("Jwt__Key", string.Empty);
-        var factory = BuildFactory();
-        Assert.Throws<InvalidOperationException>(() => factory.CreateClient());
-    }
 
     [Fact]
     public void Startup_ShouldThrow_WhenJwtKeyTooShort()

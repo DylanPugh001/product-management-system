@@ -20,7 +20,7 @@ public static class DbInitializer
     }
 
     // spidersense: dev fallback only, never used in production
-    private const string DevFallbackPassword = "Dev_SeedOnly_ChangeMe1!";
+    private const string DevFallbackPassword = "Demo123!";
 
     public static async Task SeedAsync(
         IServiceProvider services,
@@ -56,25 +56,44 @@ public static class DbInitializer
     private static async Task SeedUserAsync(UserManager<IdentityUser> userManager, string email, string password, string role)
     {
         var user = await userManager.FindByEmailAsync(email);
-        if (user is not null)
+        if (user is null)
         {
+            user = new IdentityUser
+            {
+                UserName = email,
+                Email = email,
+                EmailConfirmed = true
+            };
+
+            var createResult = await userManager.CreateAsync(user, password);
+            if (!createResult.Succeeded)
+            {
+                throw new InvalidOperationException(
+                    $"Failed to seed demo user '{email}': {string.Join("; ", createResult.Errors.Select(e => e.Description))}");
+            }
+
+            await userManager.AddToRoleAsync(user, role);
             return;
         }
 
-        user = new IdentityUser
-        {
-            UserName = email,
-            Email = email,
-            EmailConfirmed = true
-        };
-
-        var result = await userManager.CreateAsync(user, password);
-        if (!result.Succeeded)
+        var resetToken = await userManager.GeneratePasswordResetTokenAsync(user);
+        var resetResult = await userManager.ResetPasswordAsync(user, resetToken, password);
+        if (!resetResult.Succeeded)
         {
             throw new InvalidOperationException(
-                $"Failed to seed demo user '{email}': {string.Join("; ", result.Errors.Select(e => e.Description))}");
+                $"Failed to reset demo password for '{email}': {string.Join("; ", resetResult.Errors.Select(e => e.Description))}");
         }
 
-        await userManager.AddToRoleAsync(user, role);
+        if (!user.EmailConfirmed)
+        {
+            user.EmailConfirmed = true;
+            await userManager.UpdateAsync(user);
+        }
+
+        var roles = await userManager.GetRolesAsync(user);
+        if (!roles.Contains(role))
+        {
+            await userManager.AddToRoleAsync(user, role);
+        }
     }
 }

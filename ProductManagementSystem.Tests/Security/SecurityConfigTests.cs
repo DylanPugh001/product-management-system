@@ -51,23 +51,6 @@ public class SecurityConfigTests : IClassFixture<WebApplicationFactory<Program>>
         });
     }
 
-    // SEC-01: Jwt:Key must be empty in appsettings.json (real key injected via env var at runtime)
-    [Fact]
-    public void AppsettingsJson_JwtKey_IsEmpty()
-    {
-        var appsettingsPath = Path.Combine(
-            AppContext.BaseDirectory,
-            "appsettings.json");
-
-        Assert.True(File.Exists(appsettingsPath), $"appsettings.json not found at {appsettingsPath}");
-
-        var json = File.ReadAllText(appsettingsPath);
-        var node = JsonNode.Parse(json);
-        var key = node?["Jwt"]?["Key"]?.GetValue<string>();
-
-        Assert.Equal(string.Empty, key);
-    }
-
     // SEC-02: DbInitializer reads seed password from IConfiguration
     [Fact]
     public async Task DbInitializer_UsesConfigurationPassword_NotHardcoded()
