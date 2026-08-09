@@ -1,0 +1,25 @@
+<div class="login-card">
+  <h2>Sign in</h2>
+
+  <form [formGroup]="form" (ngSubmit)="onSubmit()">
+    <label for="email">Email</label>
+    <input id="email" type="email" formControlName="email" autocomplete="username" />
+
+    <label for="password">Password</label>
+    <input id="password" type="password" formControlName="password" autocomplete="current-password" />
+
+    @if (error()) {
+      <p class="error">{{ error() }}</p>
+    }
+
+    <button type="submit" [disabled]="form.invalid || loading()">
+      {{ loading() ? 'Signing in…' : 'Sign in' }}
+    </button>
+  </form>
+
+  <div class="demo-hint">
+    <p>Demo accounts:</p>
+    <p><strong>capturer@demo.local</strong> / Demo123!</p>
+    <p><strong>manager@demo.local</strong> / Demo123!</p>
+  </div>
+</div>

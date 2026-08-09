@@ -1,0 +1,48 @@
+<div class="form-card">
+  <h2>{{ isEdit() ? 'Edit Product' : 'New Product' }}</h2>
+
+  @if (forbidden()) {
+    <p class="error">You are not allowed to edit this product.</p>
+  }
+
+  @if (loading()) {
+    <p>Loading product…</p>
+  } @else if (!forbidden()) {
+    <form [formGroup]="form" (ngSubmit)="onSubmit()">
+      <label for="name">Name *</label>
+      <input id="name" type="text" formControlName="name" />
+      @if (form.controls.name.touched && form.controls.name.invalid) {
+        <p class="field-error">Name is required.</p>
+      }
+
+      <label for="description">Description</label>
+      <textarea id="description" rows="3" formControlName="description"></textarea>
+
+      <div class="row">
+        <div>
+          <label for="price">Price *</label>
+          <input id="price" type="number" step="0.01" formControlName="price" />
+        </div>
+        <div>
+          <label for="stock">Stock *</label>
+          <input id="stock" type="number" formControlName="stock" />
+        </div>
+      </div>
+
+      @if (error()) {
+        <p class="error">{{ error() }}</p>
+      }
+
+      <div class="actions">
+        <button type="button" class="secondary" (click)="router.navigate(['/products'])">Cancel</button>
+        <button type="submit" [disabled]="form.invalid || saving()">
+          {{ saving() ? 'Saving…' : isEdit() ? 'Submit for approval' : 'Create' }}
+        </button>
+      </div>
+    </form>
+
+    @if (isEdit()) {
+      <p class="hint">Saving moves this product to <strong>Pending Approval</strong>. A manager must approve it before the live record is updated.</p>
+    }
+  }
+</div>

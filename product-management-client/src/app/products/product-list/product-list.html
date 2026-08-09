@@ -1,0 +1,108 @@
+<div class="toolbar">
+  <h2>Products</h2>
+  <div class="actions">
+    <button class="secondary" (click)="goToApproved()">Approved (data lake)</button>
+    @if (auth.state()?.roles?.includes('Capturer')) {
+      <a class="button" routerLink="new">+ New Product</a>
+    }
+    <button class="link" (click)="auth.logout()">Sign out</button>
+  </div>
+</div>
+
+<div class="user-badge">
+  Signed in as <strong>{{ auth.state()?.email }}</strong>
+  ({{ auth.state()?.roles?.join(', ') }})
+</div>
+
+<div class="filter">
+  <label for="status">Status</label>
+  <select id="status" [value]="statusFilter()" (change)="statusFilter.set($any($event.target).value)">
+    <option value="all">All</option>
+    @for (s of statuses; track s) {
+      <option [value]="s">{{ statusLabels[s] }}</option>
+    }
+  </select>
+</div>
+
+@if (message()) {
+  <p class="message">{{ message() }}</p>
+}
+@if (error()) {
+  <p class="error">{{ error() }}</p>
+}
+
+@if (loading()) {
+  <p>Loading products…</p>
+} @else if (visibleProducts.length === 0) {
+  <p class="empty">No products found.</p>
+} @else {
+  <table>
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th>Price</th>
+        <th>Stock</th>
+        <th>Status</th>
+        <th>Updated</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      @for (product of visibleProducts; track product.id) {
+        <tr>
+          <td>
+            <button class="link" (click)="toggleHistory(product.id)">
+              {{ product.name }}
+              @if (product.pendingDelete) {
+                <span class="tag">delete</span>
+              }
+            </button>
+          </td>
+          <td>{{ product.price | number }}</td>
+          <td>{{ product.stock }}</td>
+          <td><span class="badge" [class]="'status-' + product.status">{{ statusLabels[product.status] }}</span></td>
+          <td>{{ product.updatedAt | date: 'short' }}</td>
+          <td class="actions-cell">
+            @if (canEdit(product)) {
+              <a class="button small" [routerLink]="[product.id, 'edit']">Edit</a>
+            }
+            @if (canApprove(product)) {
+              <button class="success small" (click)="approve(product)">Approve</button>
+            }
+            @if (canApproveDelete(product)) {
+              <button class="success small" (click)="approve(product)">Approve delete</button>
+            }
+            @if (canReject(product)) {
+              <button class="danger small" (click)="reject(product)">Reject</button>
+            }
+            @if (canDelete(product)) {
+              <button class="danger small" (click)="softDelete(product)">Soft delete</button>
+            }
+          </td>
+        </tr>
+        @if (expanded() === product.id) {
+          <tr class="history-row">
+            <td colspan="6">
+              <h4>Workflow history</h4>
+              @if (product.history.length === 0) {
+                <p>No history yet.</p>
+              } @else {
+                <ul class="history">
+                  @for (entry of product.history; track entry.id) {
+                    <li>
+                      <span class="time">{{ entry.timestamp | date: 'medium' }}</span>
+                      <strong>{{ entry.action }}</strong> by {{ entry.actorName }}
+                      @if (entry.note) {
+                        <span class="note">— {{ entry.note }}</span>
+                      }
+                    </li>
+                  }
+                </ul>
+              }
+            </td>
+          </tr>
+        }
+      }
+    </tbody>
+  </table>
+}
