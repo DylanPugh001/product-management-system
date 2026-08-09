@@ -1,9 +1,9 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 using ProductManagementSystem.Api.Data;
 using ProductManagementSystem.Api.Models;
+using ProductManagementSystem.Api.Services;
 
 namespace ProductManagementSystem.Api.Controllers;
 
@@ -11,14 +11,12 @@ namespace ProductManagementSystem.Api.Controllers;
 [Route("api/products")]
 public class ProductsController : ControllerBase
 {
-    private readonly ApplicationDbContext _db;
+    private readonly IProductService _productService;
 
-    public ProductsController(ApplicationDbContext db)
+    public ProductsController(IProductService productService)
     {
-        _db = db;
+        _productService = productService;
     }
-
-    public record ProductRequest(string Name, string? Description, decimal Price, int Stock);
 
     public record HistoryResponse(int Id, string Action, string ActorName, DateTime Timestamp, string? Note);
 
@@ -38,9 +36,9 @@ public class ProductsController : ControllerBase
 
     public record ApprovedResponse(int Id, int ProductId, string Name, string? Description, decimal Price, int Stock, DateTime ApprovedAt, string ApprovedBy);
 
-    private IQueryable<Product> ProductsWithHistory => _db.Products.Include(p => p.History);
+    public record RejectRequest(string? Reason);
 
-    private ProductResponse ToResponse(Product product) => new(
+    private ProductResponse ToResponse(Product product, bool includeHistory = true) => new(
         product.Id,
         product.Name,
         product.Description,
@@ -52,10 +50,12 @@ public class ProductsController : ControllerBase
         product.CreatedAt,
         product.UpdatedAt,
         product.PendingDelete,
-        product.History
-            .OrderByDescending(h => h.Timestamp)
-            .Select(h => new HistoryResponse(h.Id, h.Action, h.ActorName, h.Timestamp, h.Note))
-            .ToList());
+        includeHistory
+            ? product.History
+                .OrderByDescending(h => h.Timestamp)
+                .Select(h => new HistoryResponse(h.Id, h.Action, h.ActorName, h.Timestamp, h.Note))
+                .ToList()
+            : new List<HistoryResponse>());
 
     private string CurrentUserId => User.FindFirstValue(ClaimTypes.NameIdentifier) ?? string.Empty;
 
@@ -66,22 +66,22 @@ public class ProductsController : ControllerBase
 
     [HttpGet]
     [Authorize]
-    public async Task<ActionResult<IEnumerable<ProductResponse>>> GetAll()
+    public async Task<ActionResult<IEnumerable<ProductResponse>>> GetAll(
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 50)
     {
-        var userId = CurrentUserId;
-        var query = IsManager
-            ? ProductsWithHistory
-            : ProductsWithHistory.Where(p => p.CreatedBy == userId || p.Status == ProductStatus.Approved);
+        page = Math.Max(1, page);
+        pageSize = Math.Clamp(pageSize, 1, 100);
 
-        var products = await query.OrderByDescending(p => p.UpdatedAt).ToListAsync();
-        return Ok(products.Select(ToResponse));
+        var products = await _productService.GetAllAsync(CurrentUserId, IsManager, page, pageSize);
+        return Ok(products.Select(p => ToResponse(p, includeHistory: false)));
     }
 
     [HttpGet("{id:int}")]
     [Authorize]
     public async Task<ActionResult<ProductResponse>> GetById(int id)
     {
-        var product = await ProductsWithHistory.FirstOrDefaultAsync(p => p.Id == id);
+        var product = await _productService.GetByIdAsync(id);
         if (product is null)
         {
             return NotFound();
@@ -96,7 +96,7 @@ public class ProductsController : ControllerBase
     }
 
     [HttpPost]
-    [Authorize(Roles = "Capturer")]
+    [Authorize(Roles = DbInitializer.Roles.Capturer)]
     public async Task<ActionResult<ProductResponse>> Create(ProductRequest request)
     {
         if (string.IsNullOrWhiteSpace(request.Name))
@@ -104,31 +104,28 @@ public class ProductsController : ControllerBase
             return BadRequest(new { message = "Name is required." });
         }
 
-        var now = DateTime.UtcNow;
-        var product = new Product
+        if (request.Description?.Length > 2000)
+            return BadRequest(new { message = "Description must be 2000 characters or fewer." });
+
+        if (request.Price < 0)
+            return BadRequest(new { message = "Price must be non-negative." });
+
+        if (request.Stock < 0)
+            return BadRequest(new { message = "Stock must be non-negative." });
+
+        try
         {
-            Name = request.Name.Trim(),
-            Description = request.Description,
-            Price = request.Price,
-            Stock = request.Stock,
-            Status = ProductStatus.Draft,
-            CreatedBy = CurrentUserId,
-            UpdatedBy = CurrentUserId,
-            CreatedAt = now,
-            UpdatedAt = now
-        };
-
-        _db.Products.Add(product);
-        await _db.SaveChangesAsync();
-
-        AddHistory(product, "Created", CurrentUserId, CurrentUserName, null);
-        await _db.SaveChangesAsync();
-
-        return CreatedAtAction(nameof(GetById), new { id = product.Id }, ToResponse(product));
+            var product = await _productService.CreateAsync(request, CurrentUserId, CurrentUserName);
+            return CreatedAtAction(nameof(GetById), new { id = product.Id }, ToResponse(product));
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
     }
 
     [HttpPut("{id:int}")]
-    [Authorize(Roles = "Capturer")]
+    [Authorize(Roles = DbInitializer.Roles.Capturer)]
     public async Task<ActionResult<ProductResponse>> Update(int id, ProductRequest request)
     {
         if (string.IsNullOrWhiteSpace(request.Name))
@@ -136,181 +133,128 @@ public class ProductsController : ControllerBase
             return BadRequest(new { message = "Name is required." });
         }
 
-        var product = await ProductsWithHistory.FirstOrDefaultAsync(p => p.Id == id);
-        if (product is null)
-        {
-            return NotFound();
-        }
+        if (request.Description?.Length > 2000)
+            return BadRequest(new { message = "Description must be 2000 characters or fewer." });
 
-        if (product.CreatedBy != CurrentUserId)
+        if (request.Price < 0)
+            return BadRequest(new { message = "Price must be non-negative." });
+
+        if (request.Stock < 0)
+            return BadRequest(new { message = "Stock must be non-negative." });
+
+        try
+        {
+            var product = await _productService.UpdateAsync(id, request, CurrentUserId, CurrentUserName);
+            if (product is null)
+            {
+                return NotFound();
+            }
+
+            return Ok(ToResponse(product));
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+        catch (UnauthorizedAccessException)
         {
             return Forbid();
         }
-
-        if (product.Status == ProductStatus.SoftDeleted)
+        catch (InvalidOperationException ex)
         {
-            return BadRequest(new { message = "Soft-deleted products cannot be edited." });
+            return BadRequest(new { message = ex.Message });
         }
-
-        var action = product.Status == ProductStatus.Draft ? "Submitted" : "UpdateRequested";
-        product.Name = request.Name.Trim();
-        product.Description = request.Description;
-        product.Price = request.Price;
-        product.Stock = request.Stock;
-        product.Status = ProductStatus.PendingApproval;
-        product.PendingDelete = false;
-        product.UpdatedBy = CurrentUserId;
-        product.UpdatedAt = DateTime.UtcNow;
-
-        AddHistory(product, action, CurrentUserId, CurrentUserName, "Capturer submitted changes for approval.");
-        await _db.SaveChangesAsync();
-
-        return Ok(ToResponse(product));
     }
 
     [HttpPost("{id:int}/approve")]
-    [Authorize(Roles = "Manager")]
+    [Authorize(Roles = DbInitializer.Roles.Manager)]
     public async Task<ActionResult<ProductResponse>> Approve(int id)
     {
-        var product = await ProductsWithHistory.FirstOrDefaultAsync(p => p.Id == id);
-        if (product is null)
+        try
         {
-            return NotFound();
-        }
-
-        if (product.Status != ProductStatus.PendingApproval)
-        {
-            return BadRequest(new { message = "Only pending products can be approved." });
-        }
-
-        if (product.CreatedBy == CurrentUserId)
-        {
-            return StatusCode(StatusCodes.Status403Forbidden, new { message = "A manager cannot approve their own change." });
-        }
-
-        if (product.PendingDelete)
-        {
-            product.Status = ProductStatus.SoftDeleted;
-            AddHistory(product, "SoftDeleted", CurrentUserId, CurrentUserName, "Manager approved the delete request.");
-
-            var cacheRow = await _db.ApprovedProductsCache.FirstOrDefaultAsync(c => c.ProductId == product.Id);
-            if (cacheRow is not null)
+            var product = await _productService.ApproveAsync(id, CurrentUserId, CurrentUserName);
+            if (product is null)
             {
-                _db.ApprovedProductsCache.Remove(cacheRow);
-            }
-        }
-        else
-        {
-            product.Status = ProductStatus.Approved;
-            AddHistory(product, "Approved", CurrentUserId, CurrentUserName, "Manager approved the change.");
-
-            var cache = await _db.ApprovedProductsCache.FirstOrDefaultAsync(c => c.ProductId == product.Id);
-            if (cache is null)
-            {
-                cache = new ApprovedProductsCache { ProductId = product.Id };
-                _db.ApprovedProductsCache.Add(cache);
+                return NotFound();
             }
 
-            cache.Name = product.Name;
-            cache.Description = product.Description;
-            cache.Price = product.Price;
-            cache.Stock = product.Stock;
-            cache.ApprovedAt = DateTime.UtcNow;
-            cache.ApprovedBy = CurrentUserName;
+            return Ok(ToResponse(product));
         }
-
-        product.PendingDelete = false;
-        product.UpdatedBy = CurrentUserId;
-        product.UpdatedAt = DateTime.UtcNow;
-
-        await _db.SaveChangesAsync();
-        return Ok(ToResponse(product));
+        catch (UnauthorizedAccessException ex)
+        {
+            return StatusCode(StatusCodes.Status403Forbidden, new { message = ex.Message });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
     }
 
     [HttpPost("{id:int}/reject")]
-    [Authorize(Roles = "Manager")]
+    [Authorize(Roles = DbInitializer.Roles.Manager)]
     public async Task<ActionResult<ProductResponse>> Reject(int id, [FromBody] RejectRequest? request)
     {
-        var product = await ProductsWithHistory.FirstOrDefaultAsync(p => p.Id == id);
-        if (product is null)
+        if (request?.Reason?.Length > 500)
+            return BadRequest(new { message = "Reason must be 500 characters or fewer." });
+
+        try
         {
-            return NotFound();
-        }
+            var product = await _productService.RejectAsync(id, request?.Reason, CurrentUserId, CurrentUserName);
+            if (product is null)
+            {
+                return NotFound();
+            }
 
-        if (product.Status != ProductStatus.PendingApproval)
+            return Ok(ToResponse(product));
+        }
+        catch (ArgumentException ex)
         {
-            return BadRequest(new { message = "Only pending products can be rejected." });
+            return BadRequest(new { message = ex.Message });
         }
-
-        product.Status = ProductStatus.Draft;
-        product.PendingDelete = false;
-        product.UpdatedBy = CurrentUserId;
-        product.UpdatedAt = DateTime.UtcNow;
-
-        AddHistory(product, "Rejected", CurrentUserId, CurrentUserName, request?.Reason);
-        await _db.SaveChangesAsync();
-
-        return Ok(ToResponse(product));
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
     }
 
-    public record RejectRequest(string? Reason);
-
     [HttpDelete("{id:int}")]
-    [Authorize(Roles = "Manager")]
+    [Authorize(Roles = DbInitializer.Roles.Manager)]
     public async Task<ActionResult<ProductResponse>> Delete(int id)
     {
-        var product = await ProductsWithHistory.FirstOrDefaultAsync(p => p.Id == id);
-        if (product is null)
+        try
         {
-            return NotFound();
-        }
+            var product = await _productService.RequestDeleteAsync(id, CurrentUserId, CurrentUserName);
+            if (product is null)
+            {
+                return NotFound();
+            }
 
-        if (product.Status == ProductStatus.SoftDeleted || product.PendingDelete)
+            return Ok(ToResponse(product));
+        }
+        catch (InvalidOperationException ex)
         {
-            return BadRequest(new { message = "Product is already deleted or pending deletion." });
+            return BadRequest(new { message = ex.Message });
         }
-
-        product.Status = ProductStatus.PendingApproval;
-        product.PendingDelete = true;
-        product.UpdatedBy = CurrentUserId;
-        product.UpdatedAt = DateTime.UtcNow;
-
-        AddHistory(product, "SoftDeleteRequested", CurrentUserId, CurrentUserName, "Manager requested a soft delete.");
-        await _db.SaveChangesAsync();
-
-        return Ok(ToResponse(product));
     }
 
     [HttpGet("approved")]
     [AllowAnonymous]
-    public async Task<ActionResult<IEnumerable<ApprovedResponse>>> GetApproved()
+    public async Task<ActionResult<IEnumerable<ApprovedResponse>>> GetApproved(
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 50)
     {
-        var rows = await _db.ApprovedProductsCache
-            .OrderByDescending(c => c.ApprovedAt)
-            .Select(c => new ApprovedResponse(
-                c.Id,
-                c.ProductId,
-                c.Name,
-                c.Description,
-                c.Price,
-                c.Stock,
-                c.ApprovedAt,
-                c.ApprovedBy))
-            .ToListAsync();
+        page = Math.Max(1, page);
+        pageSize = Math.Clamp(pageSize, 1, 100);
 
-        return Ok(rows);
-    }
-
-    private void AddHistory(Product product, string action, string actorId, string actorName, string? note)
-    {
-        product.History.Add(new ProductApprovalHistory
-        {
-            ProductId = product.Id,
-            Action = action,
-            ActorId = actorId,
-            ActorName = actorName,
-            Timestamp = DateTime.UtcNow,
-            Note = note
-        });
+        var rows = await _productService.GetApprovedAsync(page, pageSize);
+        return Ok(rows.Select(c => new ApprovedResponse(
+            c.Id,
+            c.ProductId,
+            c.Name,
+            c.Description,
+            c.Price,
+            c.Stock,
+            c.ApprovedAt,
+            c.ApprovedBy)));
     }
 }

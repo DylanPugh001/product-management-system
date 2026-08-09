@@ -1,4 +1,7 @@
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Hosting;
 
 namespace ProductManagementSystem.Api.Data;
 
@@ -14,11 +17,27 @@ public static class DbInitializer
     {
         public const string CapturerEmail = "capturer@demo.local";
         public const string ManagerEmail = "manager@demo.local";
-        public const string Password = "Demo123!";
     }
 
-    public static async Task SeedAsync(IServiceProvider services)
+    // spidersense: dev fallback only, never used in production
+    private const string DevFallbackPassword = "Dev_SeedOnly_ChangeMe1!";
+
+    public static async Task SeedAsync(
+        IServiceProvider services,
+        IConfiguration configuration,
+        IWebHostEnvironment environment)
     {
+        var seedPassword = configuration["Seed:Password"];
+
+        if (string.IsNullOrWhiteSpace(seedPassword))
+        {
+            if (!environment.IsDevelopment())
+                throw new InvalidOperationException(
+                    "Seed:Password must be set via the Seed__Password environment variable in non-development environments.");
+
+            seedPassword = DevFallbackPassword;
+        }
+
         var roleManager = services.GetRequiredService<RoleManager<IdentityRole>>();
         var userManager = services.GetRequiredService<UserManager<IdentityUser>>();
 
@@ -30,8 +49,8 @@ public static class DbInitializer
             }
         }
 
-        await SeedUserAsync(userManager, DemoUsers.CapturerEmail, DemoUsers.Password, Roles.Capturer);
-        await SeedUserAsync(userManager, DemoUsers.ManagerEmail, DemoUsers.Password, Roles.Manager);
+        await SeedUserAsync(userManager, DemoUsers.CapturerEmail, seedPassword, Roles.Capturer);
+        await SeedUserAsync(userManager, DemoUsers.ManagerEmail, seedPassword, Roles.Manager);
     }
 
     private static async Task SeedUserAsync(UserManager<IdentityUser> userManager, string email, string password, string role)

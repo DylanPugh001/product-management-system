@@ -1,0 +1,63 @@
+services:
+  db:
+    image: keinos/sqlite3:latest
+    volumes:
+      - db-data:/data
+    healthcheck:
+      test: ["CMD", "sqlite3", "/data/productmanagement.db", "SELECT 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: ./ProductManagementSystem.Api
+      dockerfile: Dockerfile
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_URLS: http://+:5001
+      ConnectionStrings__DefaultConnection: Data Source=/data/productmanagement.db
+      Jwt__Key: ${JWT_KEY:?JWT_KEY is required}
+      Jwt__Issuer: ProductManagementSystem.Api
+      Jwt__Audience: ProductManagementSystem.Client
+      Jwt__ExpiryMinutes: "60"
+      Cors__Origin: ${CORS_ORIGIN:-http://localhost:80}
+      Seed__Password: ${SEED_PASSWORD:?SEED_PASSWORD is required}
+    volumes:
+      - db-data:/data
+    ports:
+      - "5001:5001"
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "wget",
+          "--quiet",
+          "--tries=1",
+          "--spider",
+          "http://localhost:5001/api/health",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./product-management-client
+      dockerfile: Dockerfile
+    ports:
+      - "80:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  db-data:

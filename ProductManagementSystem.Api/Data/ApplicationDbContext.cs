@@ -22,10 +22,12 @@ public class ApplicationDbContext : IdentityDbContext<IdentityUser>
         builder.Entity<Product>(entity =>
         {
             entity.Property(p => p.Name).IsRequired().HasMaxLength(200);
+            entity.Property(p => p.Description).HasMaxLength(2000);
             entity.Property(p => p.Price).HasPrecision(18, 2);
             entity.Property(p => p.CreatedBy).IsRequired().HasMaxLength(100);
             entity.Property(p => p.UpdatedBy).IsRequired().HasMaxLength(100);
             entity.HasIndex(p => p.Status);
+            entity.HasIndex(p => p.CreatedBy);
         });
 
         builder.Entity<ApprovedProductsCache>(entity =>
@@ -41,6 +43,7 @@ public class ApplicationDbContext : IdentityDbContext<IdentityUser>
             entity.Property(h => h.Action).IsRequired().HasMaxLength(50);
             entity.Property(h => h.ActorId).IsRequired().HasMaxLength(100);
             entity.Property(h => h.ActorName).IsRequired().HasMaxLength(200);
+            entity.Property(h => h.Note).HasMaxLength(500);
             entity.HasOne(h => h.Product)
                 .WithMany(p => p.History)
                 .HasForeignKey(h => h.ProductId)

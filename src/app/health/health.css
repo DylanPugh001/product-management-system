@@ -1,0 +1,37 @@
+.health-card {
+  max-width: 480px;
+  margin: 48px auto;
+  padding: 24px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  font-family: system-ui, sans-serif;
+}
+
+.status {
+  font-size: 1rem;
+}
+
+.status.ok {
+  color: #1a7f37;
+}
+
+.status.error {
+  color: #cf222e;
+}
+
+.status.loading {
+  color: #57606a;
+}
+
+dl {
+  margin: 16px 0 0;
+}
+
+dt {
+  font-weight: 600;
+  color: #57606a;
+}
+
+dd {
+  margin: 4px 0 12px;
+}

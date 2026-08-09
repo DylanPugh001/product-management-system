@@ -1,0 +1,17 @@
+<section class="health-card">
+  <h2>API Connection Check</h2>
+
+  @if (loading()) {
+    <p class="status loading">Contacting backend...</p>
+  } @else if (error()) {
+    <p class="status error">{{ error() }}</p>
+  } @else {
+    <p class="status ok">Backend is <strong>{{ status()?.status }}</strong></p>
+    <dl>
+      <dt>Service</dt>
+      <dd>{{ status()?.service }}</dd>
+      <dt>Timestamp (UTC)</dt>
+      <dd>{{ status()?.timestamp }}</dd>
+    </dl>
+  }
+</section>

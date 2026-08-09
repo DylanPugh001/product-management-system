@@ -7,6 +7,8 @@ using ProductManagementSystem.Api.Models;
 
 namespace ProductManagementSystem.Api.Services;
 
+public record TokenResult(string Token, DateTime ExpiresAt);
+
 public class JwtTokenService
 {
     private readonly JwtSettings _settings;
@@ -16,8 +18,10 @@ public class JwtTokenService
         _settings = settings;
     }
 
-    public string CreateToken(IdentityUser user, IList<string> roles)
+    public TokenResult CreateToken(IdentityUser user, IList<string> roles)
     {
+        var expiresAt = DateTime.UtcNow.AddMinutes(_settings.ExpiryMinutes);
+
         var claims = new List<Claim>
         {
             new(JwtRegisteredClaimNames.Sub, user.Id),
@@ -34,13 +38,13 @@ public class JwtTokenService
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_settings.Key));
         var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
 
-        var token = new JwtSecurityToken(
+        var jwtToken = new JwtSecurityToken(
             issuer: _settings.Issuer,
             audience: _settings.Audience,
             claims: claims,
-            expires: DateTime.UtcNow.AddMinutes(_settings.ExpiryMinutes),
+            expires: expiresAt,
             signingCredentials: credentials);
 
-        return new JwtSecurityTokenHandler().WriteToken(token);
+        return new TokenResult(new JwtSecurityTokenHandler().WriteToken(jwtToken), expiresAt);
     }
 }

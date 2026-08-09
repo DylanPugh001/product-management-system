@@ -1,0 +1,41 @@
+<div class="toolbar">
+  <h2>Approved Products (data lake read path)</h2>
+  <a class="button" routerLink="/products">Back to products</a>
+</div>
+
+<p class="hint">
+  These rows are read from the separate <code>ApprovedProductsCache</code> table via
+  <code>GET /api/products/approved</code> — no authentication required, proving the independent
+  fast-read path populated on approval.
+</p>
+
+@if (loading()) {
+  <p>Loading approved products…</p>
+} @else if (error()) {
+  <p class="error">{{ error() }}</p>
+} @else if (products().length === 0) {
+  <p class="empty">No approved products yet. Approve a pending product to populate this view.</p>
+} @else {
+  <table>
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th>Price</th>
+        <th>Stock</th>
+        <th>Approved at</th>
+        <th>Approved by</th>
+      </tr>
+    </thead>
+    <tbody>
+      @for (product of products(); track product.id) {
+        <tr>
+          <td>{{ product.name }}</td>
+          <td>{{ product.price | number }}</td>
+          <td>{{ product.stock }}</td>
+          <td>{{ product.approvedAt | date: 'medium' }}</td>
+          <td>{{ product.approvedBy }}</td>
+        </tr>
+      }
+    </tbody>
+  </table>
+}
