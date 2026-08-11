@@ -1,13 +1,14 @@
-<div class="toolbar">
-  <h2>Products</h2>
-  <div class="actions">
-    <button class="secondary" (click)="goToApproved()">Approved (data lake)</button>
-    @if (authState()?.roles?.includes('Capturer')) {
-      <a class="button" routerLink="new">+ New Product</a>
-    }
-    <button class="link" (click)="logout()">Sign out</button>
+<div class="page">
+  <div class="toolbar">
+    <h2>Products</h2>
+    <div class="actions">
+      <button class="secondary" (click)="goToApproved()">Approved (data lake)</button>
+      @if (authState()?.roles?.includes('Capturer')) {
+        <a class="button" routerLink="new">+ New Product</a>
+      }
+      <button class="link" (click)="logout()">Sign out</button>
+    </div>
   </div>
-</div>
 
 <div class="user-badge">
   Signed in as <strong>{{ authState()?.email }}</strong>
@@ -127,4 +128,5 @@
       }
     </tbody>
   </table>
-}
+  }
+</div>
