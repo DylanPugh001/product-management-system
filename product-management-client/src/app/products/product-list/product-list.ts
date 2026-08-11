@@ -1,4 +1,4 @@
-import { Component, OnInit, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
 import { DatePipe, DecimalPipe } from '@angular/common';
 import { Router, RouterLink } from '@angular/router';
 import { AuthService } from '../../auth/auth.service';
@@ -10,10 +10,11 @@ import { Product, ProductStatus, STATUS_LABELS } from '../product.models';
   imports: [RouterLink, DatePipe, DecimalPipe],
   templateUrl: './product-list.html',
   styleUrl: './product-list.css',
+  changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class ProductListComponent implements OnInit {
   private readonly productService = inject(ProductService);
-  readonly auth = inject(AuthService);
+  private readonly auth = inject(AuthService);
   private readonly router = inject(Router);
 
   readonly products = signal<Product[]>([]);
@@ -23,14 +24,30 @@ export class ProductListComponent implements OnInit {
   readonly message = signal<string | null>(null);
   readonly expanded = signal<number | null>(null);
 
+  readonly pendingRejectProduct = signal<Product | null>(null);
+  readonly rejectReason = signal('');
+  readonly pendingDeleteProduct = signal<Product | null>(null);
+
   readonly statusLabels = STATUS_LABELS;
-  readonly statuses = [ProductStatus.Draft, ProductStatus.PendingApproval, ProductStatus.Approved, ProductStatus.SoftDeleted];
+  readonly statuses = [
+    ProductStatus.Draft,
+    ProductStatus.PendingApproval,
+    ProductStatus.Approved,
+    ProductStatus.SoftDeleted,
+  ];
+
+  onStatusChange(event: Event): void {
+    const value = (event.target as HTMLSelectElement).value;
+    this.statusFilter.set(value === 'all' ? 'all' : (Number(value) as ProductStatus));
+  }
+
+  get isManager(): boolean {
+    return this.auth.isManager;
+  }
 
   get visibleProducts(): Product[] {
     const filter = this.statusFilter();
-    return filter === 'all'
-      ? this.products()
-      : this.products().filter((p) => p.status === filter);
+    return filter === 'all' ? this.products() : this.products().filter((p) => p.status === filter);
   }
 
   ngOnInit(): void {
@@ -45,9 +62,9 @@ export class ProductListComponent implements OnInit {
         this.products.set(products);
         this.loading.set(false);
       },
-      error: (err) => {
+      error: () => {
         this.loading.set(false);
-        this.error.set(err.status === 401 ? 'Session expired. Please sign in again.' : 'Failed to load products.');
+        this.error.set('Failed to load products.');
       },
     });
   }
@@ -74,48 +91,69 @@ export class ProductListComponent implements OnInit {
 
   canDelete(product: Product): boolean {
     return (
-      this.auth.isManager &&
-      product.status !== ProductStatus.SoftDeleted &&
-      !product.pendingDelete
+      this.auth.isManager && product.status !== ProductStatus.SoftDeleted && !product.pendingDelete
     );
   }
 
   canApproveDelete(product: Product): boolean {
-    return this.auth.isManager && product.status === ProductStatus.PendingApproval && product.pendingDelete;
+    return (
+      this.auth.isManager &&
+      product.status === ProductStatus.PendingApproval &&
+      product.pendingDelete
+    );
   }
 
   approve(product: Product): void {
     this.productService.approve(product.id).subscribe({
-      next: () => {
+      next: (updated) => {
         this.message.set(`Approved "${product.name}".`);
-        this.loadProducts();
+        this.products.update((list) => list.map((p) => (p.id === updated.id ? updated : p)));
       },
       error: () => this.error.set('Failed to approve the product.'),
     });
   }
 
-  reject(product: Product): void {
-    const reason = window.prompt(`Reject "${product.name}" — optional reason:`);
-    this.productService.reject(product.id, reason ?? undefined).subscribe({
-      next: () => {
+  promptReject(product: Product): void {
+    this.pendingRejectProduct.set(product);
+    this.rejectReason.set('');
+  }
+
+  confirmReject(): void {
+    const product = this.pendingRejectProduct();
+    if (!product) return;
+    this.pendingRejectProduct.set(null);
+    this.productService.reject(product.id, this.rejectReason() || undefined).subscribe({
+      next: (updated) => {
         this.message.set(`Rejected "${product.name}".`);
-        this.loadProducts();
+        this.products.update((list) => list.map((p) => (p.id === updated.id ? updated : p)));
       },
       error: () => this.error.set('Failed to reject the product.'),
     });
   }
 
-  softDelete(product: Product): void {
-    if (!window.confirm(`Request soft delete of "${product.name}"?`)) {
-      return;
-    }
+  cancelReject(): void {
+    this.pendingRejectProduct.set(null);
+  }
+
+  promptDelete(product: Product): void {
+    this.pendingDeleteProduct.set(product);
+  }
+
+  confirmDelete(): void {
+    const product = this.pendingDeleteProduct();
+    if (!product) return;
+    this.pendingDeleteProduct.set(null);
     this.productService.softDelete(product.id).subscribe({
-      next: () => {
+      next: (updated) => {
         this.message.set(`Soft-delete request for "${product.name}" submitted for approval.`);
-        this.loadProducts();
+        this.products.update((list) => list.map((p) => (p.id === updated.id ? updated : p)));
       },
       error: () => this.error.set('Failed to request the soft delete.'),
     });
+  }
+
+  cancelDelete(): void {
+    this.pendingDeleteProduct.set(null);
   }
 
   toggleHistory(productId: number): void {
@@ -124,5 +162,13 @@ export class ProductListComponent implements OnInit {
 
   goToApproved(): void {
     this.router.navigate(['/products/approved']);
+  }
+
+  logout(): void {
+    this.auth.logout();
+  }
+
+  authState() {
+    return this.auth.state();
   }
 }

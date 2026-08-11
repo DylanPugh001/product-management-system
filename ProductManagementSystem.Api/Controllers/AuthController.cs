@@ -11,11 +11,16 @@ namespace ProductManagementSystem.Api.Controllers;
 public class AuthController : ControllerBase
 {
     private readonly UserManager<IdentityUser> _userManager;
+    private readonly SignInManager<IdentityUser> _signInManager;
     private readonly JwtTokenService _tokenService;
 
-    public AuthController(UserManager<IdentityUser> userManager, JwtTokenService tokenService)
+    public AuthController(
+        UserManager<IdentityUser> userManager,
+        SignInManager<IdentityUser> signInManager,
+        JwtTokenService tokenService)
     {
         _userManager = userManager;
+        _signInManager = signInManager;
         _tokenService = tokenService;
     }
 
@@ -33,26 +38,41 @@ public class AuthController : ControllerBase
     public async Task<ActionResult<LoginResponse>> Login(LoginRequest request)
     {
         var user = await _userManager.FindByEmailAsync(request.Email);
-        if (user is null || !await _userManager.CheckPasswordAsync(user, request.Password))
+        if (user is null)
+        {
+            return Unauthorized(new { message = "Invalid email or password." });
+        }
+
+        // SEC-05: use SignInManager so lockout is enforced
+        var result = await _signInManager.CheckPasswordSignInAsync(user, request.Password, lockoutOnFailure: true);
+
+        if (result.IsLockedOut)
+        {
+            return StatusCode(StatusCodes.Status429TooManyRequests,
+                new { message = "Account locked. Try again later." });
+        }
+
+        if (!result.Succeeded)
         {
             return Unauthorized(new { message = "Invalid email or password." });
         }
 
         var roles = await _userManager.GetRolesAsync(user);
-
-        var token = _tokenService.CreateToken(user, roles);
+        var tokenResult = _tokenService.CreateToken(user, roles);
 
         return Ok(new LoginResponse(
-            token,
+            tokenResult.Token,
             user.Id,
             user.Email ?? user.UserName ?? string.Empty,
             roles,
-            DateTime.UtcNow.AddHours(1)));
+            tokenResult.ExpiresAt));
     }
+
+    public record MeResponse(string UserId, string Email, IList<string> Roles);
 
     [HttpGet("me")]
     [Authorize]
-    public ActionResult<LoginResponse> Me()
+    public ActionResult<MeResponse> Me()
     {
         var userId = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? string.Empty;
         var email = User.FindFirstValue(ClaimTypes.Email)
@@ -60,6 +80,6 @@ public class AuthController : ControllerBase
             ?? string.Empty;
         var roles = User.FindAll(ClaimTypes.Role).Select(c => c.Value).ToList();
 
-        return Ok(new LoginResponse(string.Empty, userId, email, roles, DateTime.MinValue));
+        return Ok(new MeResponse(userId, email, roles));
     }
 }

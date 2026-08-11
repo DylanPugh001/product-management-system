@@ -15,17 +15,31 @@ builder.Services.AddControllers();
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
     options.UseSqlite(builder.Configuration.GetConnectionString("DefaultConnection")));
 
+// SEC-05: lockout config; SEC-07: password policy
 builder.Services.AddIdentity<IdentityUser, IdentityRole>(options =>
     {
-        options.Password.RequireNonAlphanumeric = false;
+        options.Password.RequiredLength = 8;
+        options.Password.RequireUppercase = true;
+        options.Password.RequireDigit = true;
+        options.Password.RequireNonAlphanumeric = true;
+
+        options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(5);
+        options.Lockout.MaxFailedAccessAttempts = 5;
+        options.Lockout.AllowedForNewUsers = true;
     })
     .AddEntityFrameworkStores<ApplicationDbContext>()
     .AddDefaultTokenProviders();
 
 var jwtSettings = builder.Configuration.GetSection("Jwt").Get<JwtSettings>()
     ?? throw new InvalidOperationException("Jwt settings are not configured.");
+
+if (string.IsNullOrWhiteSpace(jwtSettings.Key) || jwtSettings.Key.Length < 32)
+    throw new InvalidOperationException(
+        "Jwt:Key must be at least 32 characters. Set it via the Jwt__Key environment variable.");
+
 builder.Services.AddSingleton(jwtSettings);
 builder.Services.AddSingleton<JwtTokenService>();
+builder.Services.AddScoped<IProductService, ProductService>();
 
 builder.Services.AddAuthentication(options =>
 {
@@ -36,7 +50,8 @@ builder.Services.AddAuthentication(options =>
 .AddJwtBearer(options =>
 {
     options.SaveToken = true;
-    options.RequireHttpsMetadata = false;
+    // SEC-03: require HTTPS in non-dev environments
+    options.RequireHttpsMetadata = !builder.Environment.IsDevelopment();
     options.TokenValidationParameters = new TokenValidationParameters
     {
         ValidateIssuerSigningKey = true,
@@ -52,21 +67,34 @@ builder.Services.AddAuthentication(options =>
 
 builder.Services.AddAuthorization();
 
+// SEC-10: CORS origin from configuration
+var corsOrigin = builder.Configuration["Cors:Origin"]
+    ?? "http://localhost:4200"; // dev fallback only
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AngularClient", policy =>
-        policy.WithOrigins("http://localhost:4200")
-            .AllowAnyHeader()
-            .AllowAnyMethod());
+        policy.WithOrigins(corsOrigin)
+            .WithMethods("GET", "POST", "PUT", "DELETE")
+            .WithHeaders("Authorization", "Content-Type"));
 });
 
 var app = builder.Build();
 
+// SEC-03: HTTPS redirect and HSTS outside dev
+if (!app.Environment.IsDevelopment())
+{
+    app.UseHttpsRedirection();
+    app.UseHsts();
+}
+
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-    db.Database.Migrate();
-    await DbInitializer.SeedAsync(scope.ServiceProvider);
+    if (db.Database.ProviderName != "Microsoft.EntityFrameworkCore.InMemory")
+        db.Database.Migrate();
+    else
+        db.Database.EnsureCreated();
+    await DbInitializer.SeedAsync(scope.ServiceProvider, app.Configuration, app.Environment);
 }
 
 app.UseCors("AngularClient");
@@ -74,13 +102,11 @@ app.UseCors("AngularClient");
 app.UseAuthentication();
 app.UseAuthorization();
 
-app.MapGet("/api/health", () => Results.Ok(new
-{
-    status = "ok",
-    service = "ProductManagementSystem.Api",
-    timestamp = DateTime.UtcNow
-}));
+// SEC-12: no service name or timestamp in health response
+app.MapGet("/api/health", () => Results.Ok(new { status = "ok" }));
 
 app.MapControllers();
 
 app.Run();
+
+public partial class Program { }

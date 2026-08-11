@@ -263,6 +263,7 @@ namespace ProductManagementSystem.Api.Migrations
                         .HasColumnType("TEXT");
 
                     b.Property<string>("Description")
+                        .HasMaxLength(2000)
                         .HasColumnType("TEXT");
 
                     b.Property<string>("Name")
@@ -293,6 +294,8 @@ namespace ProductManagementSystem.Api.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("CreatedBy");
+
                     b.HasIndex("Status");
 
                     b.ToTable("Products");
@@ -320,6 +323,7 @@ namespace ProductManagementSystem.Api.Migrations
                         .HasColumnType("TEXT");
 
                     b.Property<string>("Note")
+                        .HasMaxLength(500)
                         .HasColumnType("TEXT");
 
                     b.Property<int>("ProductId")

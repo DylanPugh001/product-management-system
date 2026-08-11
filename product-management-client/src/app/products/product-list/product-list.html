@@ -1,22 +1,23 @@
-<div class="toolbar">
-  <h2>Products</h2>
-  <div class="actions">
-    <button class="secondary" (click)="goToApproved()">Approved (data lake)</button>
-    @if (auth.state()?.roles?.includes('Capturer')) {
-      <a class="button" routerLink="new">+ New Product</a>
-    }
-    <button class="link" (click)="auth.logout()">Sign out</button>
+<div class="page">
+  <div class="toolbar">
+    <h2>Products</h2>
+    <div class="actions">
+      <button class="secondary" (click)="goToApproved()">Approved (data lake)</button>
+      @if (authState()?.roles?.includes('Capturer')) {
+        <a class="button" routerLink="new">+ New Product</a>
+      }
+      <button class="link" (click)="logout()">Sign out</button>
+    </div>
   </div>
-</div>
 
 <div class="user-badge">
-  Signed in as <strong>{{ auth.state()?.email }}</strong>
-  ({{ auth.state()?.roles?.join(', ') }})
+  Signed in as <strong>{{ authState()?.email }}</strong>
+  ({{ authState()?.roles?.join(', ') }})
 </div>
 
 <div class="filter">
   <label for="status">Status</label>
-  <select id="status" [value]="statusFilter()" (change)="statusFilter.set($any($event.target).value)">
+  <select id="status" [value]="statusFilter()" (change)="onStatusChange($event)">
     <option value="all">All</option>
     @for (s of statuses; track s) {
       <option [value]="s">{{ statusLabels[s] }}</option>
@@ -29,6 +30,28 @@
 }
 @if (error()) {
   <p class="error">{{ error() }}</p>
+}
+
+@if (pendingRejectProduct()) {
+  <div class="confirm-panel">
+    <p>Reject <strong>{{ pendingRejectProduct()!.name }}</strong></p>
+    <label for="rejectReason">Reason (optional)</label>
+    <input id="rejectReason" type="text" [value]="rejectReason()" (input)="rejectReason.set($any($event.target).value)" />
+    <div class="confirm-actions">
+      <button class="danger" (click)="confirmReject()">Confirm reject</button>
+      <button class="secondary" (click)="cancelReject()">Cancel</button>
+    </div>
+  </div>
+}
+
+@if (pendingDeleteProduct()) {
+  <div class="confirm-panel">
+    <p>Request soft delete of <strong>{{ pendingDeleteProduct()!.name }}</strong>?</p>
+    <div class="confirm-actions">
+      <button class="danger" (click)="confirmDelete()">Confirm</button>
+      <button class="secondary" (click)="cancelDelete()">Cancel</button>
+    </div>
+  </div>
 }
 
 @if (loading()) {
@@ -73,10 +96,10 @@
               <button class="success small" (click)="approve(product)">Approve delete</button>
             }
             @if (canReject(product)) {
-              <button class="danger small" (click)="reject(product)">Reject</button>
+              <button class="danger small" (click)="promptReject(product)">Reject</button>
             }
             @if (canDelete(product)) {
-              <button class="danger small" (click)="softDelete(product)">Soft delete</button>
+              <button class="danger small" (click)="promptDelete(product)">Soft delete</button>
             }
           </td>
         </tr>
@@ -105,4 +128,5 @@
       }
     </tbody>
   </table>
-}
+  }
+</div>
