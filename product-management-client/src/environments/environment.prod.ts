@@ -1,3 +1,3 @@
 export const environment = {
-  apiBaseUrl: 'https://REPLACE-WITH-API-URL.azurewebsites.net',
+  apiBaseUrl: 'https://moyo-pms-api.azurewebsites.net',
 };
