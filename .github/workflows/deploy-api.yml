@@ -1,0 +1,60 @@
+name: Deploy API to Azure
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'ProductManagementSystem.Api/**'
+      - 'ProductManagementSystem.Tests/**'
+      - 'ProductManagementSystem.slnx'
+      - '.github/workflows/deploy-api.yml'
+
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  DOTNET_VERSION: '8.0.x'
+  PROJECT_PATH: 'ProductManagementSystem.Api/ProductManagementSystem.Api.csproj'
+  PUBLISH_DIR: './publish'
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Restore
+        run: dotnet restore "${{ env.PROJECT_PATH }}"
+
+      - name: Build
+        run: dotnet build "${{ env.PROJECT_PATH }}" --configuration Release --no-restore
+
+      - name: Test
+        run: dotnet test ProductManagementSystem.Tests --configuration Release --no-restore
+
+      - name: Publish
+        run: dotnet publish "${{ env.PROJECT_PATH }}" --configuration Release --no-restore --output "${{ env.PUBLISH_DIR }}"
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          client-id: c3baad6a-bc46-40eb-947f-9e45fbbb061a
+          tenant-id: 2e976dbb-a924-4a4e-b2eb-72b804676164
+          subscription-id: bb07bd71-cff7-4b70-9832-1f67c76cb823
+
+      - name: Deploy to Azure App Service
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: moyo-pms-api
+          package: ${{ env.PUBLISH_DIR }}
