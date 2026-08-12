@@ -1,0 +1,173 @@
+.toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.actions {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.user-badge {
+  color: #555;
+  font-size: 0.9rem;
+  margin-bottom: 1rem;
+}
+
+.filter {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.filter select {
+  padding: 0.4rem;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+th,
+td {
+  text-align: left;
+  padding: 0.6rem;
+  border-bottom: 1px solid #eee;
+  vertical-align: top;
+}
+
+th {
+  background: #f9fafb;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  color: #555;
+}
+
+.actions-cell {
+  white-space: nowrap;
+}
+
+.badge {
+  display: inline-block;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.status-0 {
+  background: #e5e7eb;
+  color: #374151;
+}
+
+.status-1 {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.status-2 {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.status-3 {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.tag {
+  margin-left: 0.4rem;
+  padding: 0.1rem 0.35rem;
+  border-radius: 4px;
+  background: #fee2e2;
+  color: #991b1b;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+}
+
+.button,
+a.button {
+  display: inline-block;
+  padding: 0.5rem 0.9rem;
+  border: none;
+  border-radius: 4px;
+  background: #2563eb;
+  color: #fff;
+  font-size: 0.9rem;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.button.small,
+a.button.small {
+  padding: 0.3rem 0.6rem;
+  font-size: 0.8rem;
+}
+
+.button.secondary {
+  background: #6b7280;
+}
+
+.button.success {
+  background: #16a34a;
+}
+
+.button.danger {
+  background: #dc2626;
+}
+
+.button.link,
+button.link {
+  background: none;
+  border: none;
+  color: #2563eb;
+  cursor: pointer;
+  padding: 0;
+  font-size: 0.95rem;
+  text-decoration: underline;
+}
+
+.message {
+  color: #166534;
+}
+
+.error {
+  color: #dc2626;
+}
+
+.empty {
+  color: #666;
+  font-style: italic;
+}
+
+.history-row td {
+  background: #f9fafb;
+}
+
+.history {
+  list-style: none;
+  padding: 0;
+  margin: 0.5rem 0 0;
+  font-size: 0.9rem;
+}
+
+.history li {
+  padding: 0.25rem 0;
+}
+
+.history .time {
+  color: #888;
+  margin-right: 0.5rem;
+  font-size: 0.8rem;
+}
+
+.history .note {
+  color: #666;
+}
