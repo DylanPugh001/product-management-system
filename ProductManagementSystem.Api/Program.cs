@@ -74,8 +74,11 @@ builder.Services.AddAuthentication(options =>
 builder.Services.AddAuthorization();
 
 // SEC-10: CORS origins from configuration
-var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>()
-    ?? ["http://localhost:4200"]; // dev fallback only
+var allowedOrigins = builder.Configuration
+    .GetSection("Cors:AllowedOrigins")
+    .Get<string[]>()
+    ?? new[] { "http://localhost:4200" };
+
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AngularClient", policy =>
